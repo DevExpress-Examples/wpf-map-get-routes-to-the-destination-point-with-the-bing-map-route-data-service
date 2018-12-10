@@ -1,161 +1,130 @@
 ﻿using DevExpress.Xpf.Map;
+using DevExpress.Xpf.Ribbon;
 using System;
-using System.Collections.Generic;
 using System.Text;
 using System.Windows;
-using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace CalculateRoutesFromMajorRoads {
-    public partial class MainWindow : Window {
-        public GeoPoint location = new GeoPoint(40, -120);
+    public partial class MainWindow : DXRibbonWindow {
+        public Point MouseDownPosition { get; set; }
 
         public MainWindow() {
             InitializeComponent();
-            this.DataContext = location;
         }
-        
+
+        private void OnMapControlMouseDown(object sender, MouseButtonEventArgs e) {
+            MouseDownPosition = e.GetPosition(mapControl);
+        }
+
+        #region #CalculateRoutesFromMajorRoads
+        private void OnMapControlMouseUp(object sender, MouseButtonEventArgs e) {
+            Point mouseUpPosition = e.GetPosition(mapControl);
+            if (IsScrolled(mouseUpPosition)) return;
+            GeoPoint point = mapControl.ScreenPointToCoordPoint(mouseUpPosition) as GeoPoint;
+            CalculateRoutesFromMajorRoads(point);
+        }
+
+        private bool IsScrolled(Point mouseUpPosition) {
+            var positionDistance =
+                  (MouseDownPosition.X - mouseUpPosition.X)
+                * (MouseDownPosition.X - mouseUpPosition.X)
+                + (MouseDownPosition.Y - mouseUpPosition.Y)
+                * (MouseDownPosition.Y - mouseUpPosition.Y);
+            return positionDistance >= 4;
+        }
+
+        private void CalculateRoutesFromMajorRoads(GeoPoint point) {
+            targetLocationPushpin.Location = point;
+            targetLocationPushpin.Visible = true;
+            routeProvider.CalculateRoutesFromMajorRoads(new RouteWaypoint(String.Empty, point));
+            bsiState.Content = "Started to calculate routes from major roads.";
+        }
+        #endregion #CalculateRoutesFromMajorRoads
+
         #region #RouteCalculated
-        private void routeDataProvider_RouteCalculated(object sender, BingRouteCalculatedEventArgs e) {
-            RouteCalculationResult result = e.CalculationResult;
-            
-            StringBuilder resultList = new StringBuilder();
-            resultList.Append(String.Format("Status: {0}\n", result.ResultCode));
-            resultList.Append(String.Format("Fault reason: {0}\n", result.FaultReason));
-            resultList.Append(ProcessIntermediatePoints(result.IntermediatePoints));
-            resultList.Append(ProcessRouteResults(result.RouteResults));
-            
-            tbResults.Text = resultList.ToString();
+        private void routeProvider_RouteCalculated(object sender, BingRouteCalculatedEventArgs e) {
+            tbResults.Text = ParseRouteCalculationResult(e.CalculationResult);
+            bsiState.Content = "Ready.";
+        }
+
+        string ParseRouteCalculationResult(RouteCalculationResult result) {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("Status: ").Append(result.ResultCode).Append("\n");
+            if (result.ResultCode != RequestResultCode.Success) {
+                sb.Append("Fault reason: ").Append(result.FaultReason).Append("\n");
+            } else {
+                sb.Append("Intermediate Points:\n");
+                for (int i = 0; i < result.IntermediatePoints.Count; i++) {
+                    AppendIntermediatePointString(sb, i, result.IntermediatePoints[i]);
+                }
+                sb.Append("Route Results:\n");
+                for (int i = 0; i < result.RouteResults.Count; i++) {
+                    AppendRouteResultString(sb, i, result.RouteResults[i]);
+                }
+            }
+            return sb.ToString();
         }
         #endregion #RouteCalculated
 
         #region #ProcessStartingPoints
-        string ProcessIntermediatePoints(List<RouteWaypoint> points) {
-            if (points == null) return "";
-
-            StringBuilder sb = new StringBuilder("Intermediate Points:\n"); 
-            sb.Append(String.Format("_________________________\n"));
-            for (int i = 0; i < points.Count; ++i)
-                    sb.Append(String.Format(
-                        "Intermediate point {0}: {1} ({2})\n", 
-                        i+1,
-                        points[i].Description, 
-                        points[i].Location
-                    ));
-            return sb.ToString();
+        void AppendIntermediatePointString(StringBuilder sb, int index, RouteWaypoint point) {
+            sb.Append(index + 1).Append("\tLocation: ").Append(point.Location)
+                .Append("\n\tDescription: ").Append(point.Description)
+                .Append("\n");
         }
         #endregion #ProcessStartingPoints
 
         #region #ProcessRouteResults
-        string ProcessRouteResults(List<BingRouteResult> results) {
-            if (results == null) return "";
-
-            StringBuilder sb = new StringBuilder("RouteResults:\n");
-            for (int i = 0; i < results.Count; i++) {
-                sb.Append(String.Format("_________________________\n"));
-                sb.Append(String.Format("Path {0}:\n", i+1));
-                sb.Append(String.Format("Distance: {0}\n", results[i].Distance));
-                sb.Append(String.Format("Time: {0}\n", results[i].Time));
-                sb.Append(ProcessLegs(results[i].Legs));
+        void AppendRouteResultString(StringBuilder sb, int index, BingRouteResult routeResult) {
+            sb.Append(index + 1).Append("\tDistance: ").Append(routeResult.Distance)
+                    .Append("\n\tTime: ").Append(routeResult.Time)
+                    .Append("\n\tLegs:\n");
+            for (int i = 0; i < routeResult.Legs.Count; i++) {
+                AppendLegString(sb, i, routeResult.Legs[i]);
             }
-            return sb.ToString();
         }
+
         #endregion #ProcessRouteResults
 
         #region #ProcessLegs
-        string ProcessLegs(List<BingRouteLeg> legs) {
-            if (legs == null) return "";
-            
-            StringBuilder sb = new StringBuilder("Legs:\n");    
-            for (int i = 0; i < legs.Count; i++) {
-                sb.Append(String.Format("\tLeg {0}:\n", i+1));
-                sb.Append(String.Format("\tStart: {0}\n", legs[i].StartPoint));
-                sb.Append(String.Format("\tEnd: {0}\n", legs[i].EndPoint));
-                sb.Append(String.Format("\tDistance: {0}\n", legs[i].Distance));
-                sb.Append(String.Format("\tTime: {0}\n", legs[i].Time));
-                sb.Append(ProcessItinerary(legs[i].Itinerary));
+        void AppendLegString(StringBuilder sb, int index, BingRouteLeg leg) {
+            sb.Append("\t").Append(index + 1).Append("\t").Append("Start: ").Append(leg.StartPoint)
+                .Append("\n\t\t").Append("End: ").Append(leg.EndPoint)
+                .Append("\n\t\tDistance: ").Append(leg.Distance)
+                .Append("\n\t\tTime: ").Append(leg.Time)
+                .Append("\n\t\tInternary:")
+                .Append("\n");
+            for (int i = 0; i < leg.Itinerary.Count; i++) {
+                AppendInternaryString(sb, i, leg.Itinerary[i]);
             }
-            return sb.ToString();
         }
         #endregion #ProcessLegs
 
         #region #ProcessItinerary
-        string ProcessItinerary(List<BingItineraryItem> items) {
-            if (items == null) return "";
-            
-            StringBuilder sb = new StringBuilder("\tInternary Items:\n");
-            for (int i = 0; i < items.Count; i++) {
-                sb.Append(String.Format("\t\tItinerary {0}:\n", i+1));
-                sb.Append(String.Format("\t\tManeuver: {0}\n", items[i].Maneuver));
-                sb.Append(String.Format("\t\tLocation: {0}\n", items[i].Location));
-                sb.Append(String.Format("\t\tInstructions: {0}\n", items[i].ManeuverInstruction));
-                sb.Append(ProcessWarnings(items[i].Warnings));
+        void AppendInternaryString(StringBuilder sb, int index, BingItineraryItem internary) {
+            sb.Append("\t\t").Append(index + 1).Append("\t").Append("Maneuver: ").Append(internary.Maneuver)
+                .Append("\n\t\t\tLocation: ").Append(internary.Location)
+                .Append("\n\t\t\tInstructions: ").Append(internary.ManeuverInstruction)
+                .Append("\n");
+            if (internary.Warnings.Count > 0) {
+                sb.Append("\t\t\tWarnings:\n");
+                for (int i = 0; i < internary.Warnings.Count; i++) {
+                    AppendWarningString(sb, i, internary.Warnings[i]);
+                }
             }
-            return sb.ToString();
         }
         #endregion #ProcessItinerary
 
         #region #ProcessWarnings
-        string ProcessWarnings(List<BingItineraryItemWarning> warnings) {
-            if (warnings == null) return "";
-
-            StringBuilder sb = new StringBuilder("\t\tWarnings:\n");
-            for (int i = 0; i < warnings.Count; i++) {
-                sb.Append(String.Format("\t\t\tWarning {0}:\n", i + 1));
-                sb.Append(String.Format("\t\t\tType: {0}\n", warnings[i].Type));
-                sb.Append(String.Format("\t\t\tText: {0}\n", warnings[i].Text));
-
-            }
-            return sb.ToString();
+        void AppendWarningString(StringBuilder sb, int index, BingItineraryItemWarning warning) {
+            sb.Append("\t\t\t").Append(index + 1).Append("\tType: ").Append(warning.Type)
+                .Append("\n\t\t\t\tText: ").Append(warning.Text).Append("\n");
         }
         #endregion #ProcessWarnings
 
-        #region #CalculateRoutesFromMajorRoads
-        private void calculateRoutes_Click(object sender, RoutedEventArgs e) {
-            routeProvider.CalculateRoutesFromMajorRoads(new RouteWaypoint(tbDestination.Text, location));
-        }
-        #endregion #CalculateRoutesFromMajorRoads
-
-        private void ValidationError(object sender, ValidationErrorEventArgs e) {
-            if (e.Action == ValidationErrorEventAction.Added)
-                MessageBox.Show(e.Error.ErrorContent.ToString());
+        private void routeProvider_LayerItemsGenerating(object sender, LayerItemsGeneratingEventArgs args) {
+            mapControl.ZoomToFit(args.Items);
         }
     }
-
-    class RangeDoubleValidationRule : ValidationRule {
-        double min = Double.MinValue;
-        double max = Double.MaxValue;
-        public double Min {
-            get { return min; }
-            set {
-                if ((value != min) && (value <=max))
-                    min = value;
-            }
-        }
-        public double Max {
-            get { return max; }
-            set {
-                if ((value != max) && (value >= min))
-                    max = value;
-            }
-        }
-
-        public override ValidationResult Validate(object value, System.Globalization.CultureInfo cultureInfo) {
-            double d;
-            if (!Double.TryParse(value as string, out d))
-                return new ValidationResult(false, "Input value should be floating point number.");
-
-            if ((d < min) || (d > max))
-                return new ValidationResult(
-                    false, 
-                    String.Format(
-                        "Input value should be larger than or equals to {0} and less than or equals to {1}", 
-                        min, 
-                        max 
-                    )
-                );
-
-            return new ValidationResult(true, null);
-        }
-    }
-
 }

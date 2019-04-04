@@ -1,7 +1,7 @@
 <!-- default file list -->
 *Files to look at*:
 
-* **[MainWindow.xaml](./CS/CalculateRoutesFromMajorRoads/MainWindow.xaml) (VB: [MainWindow.xaml.vb](./VB/CalculateRoutesFromMajorRoads/MainWindow.xaml.vb))**
+* **[MainWindow.xaml](./CS/CalculateRoutesFromMajorRoads/MainWindow.xaml) (VB: [MainWindow.xaml](./VB/CalculateRoutesFromMajorRoads/MainWindow.xaml))**
 * [MainWindow.xaml.cs](./CS/CalculateRoutesFromMajorRoads/MainWindow.xaml.cs) (VB: [MainWindow.xaml.vb](./VB/CalculateRoutesFromMajorRoads/MainWindow.xaml.vb))
 <!-- default file list end -->
 # How to get routes to the destination point using the Bing Map Route Data Service  
